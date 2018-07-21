@@ -28,6 +28,8 @@ namespace S3Verification
 	public class S3VerificationStructure : MonoBehaviour
 	{
 		public Dictionary<string, FileEntry> FileList;
+		public delegate void OnAsyncRetrievedEvent(Dictionary<string, FileEntry> fileEntryDictionary);
+		public OnAsyncRetrievedEvent OnAsyncRetrieved;
 
 		#region S3 Initilization
 		public string S3BucketName = null;
@@ -49,7 +51,12 @@ namespace S3Verification
 			UnityInitializer.AttachToGameObject(this.gameObject);
 			AWSConfigs.HttpClient = AWSConfigs.HttpClientOption.UnityWebRequest;
 
-			S3PostFiles ();
+			S3GetObjects ("Bloopers.");
+			OnAsyncRetrieved += new OnAsyncRetrievedEvent (OnAsyncRetrievedTest);
+		}
+
+		void OnAsyncRetrievedTest(Dictionary<string, FileEntry> fileEntryDictionary) {
+			Debug.Log ("[This is the event response through delegates]fileList Count [Inside responseObject]: " + fileEntryDictionary.Count);
 		}
 
 		#region private members
@@ -98,7 +105,7 @@ namespace S3Verification
 		// Return a Dictionary of all objects in terms of files
 		// NOTE: ListObjects method can only return only 1000 objects
 		// 		 Anything more, we'll have to use markers to advance to the next set of 1000 objects.
-		public Dictionary<string, FileEntry> S3GetObjects(string bucket)
+		public void S3GetObjects(string bucket)
 		{
 			Dictionary<string, FileEntry> fileList = new Dictionary<string, FileEntry> ();
 
@@ -118,6 +125,10 @@ namespace S3Verification
 						fileList.Add(entry.path, entry);
 						Debug.Log ("fileList Count [Inside responseObject]: " + fileList.Count);
 					});
+
+						if (OnAsyncRetrieved != null) {
+							OnAsyncRetrieved(fileList);
+						}
 				} 
 
 				catch (AmazonS3Exception e) 
@@ -126,8 +137,8 @@ namespace S3Verification
 				}
 			});
 
-			Debug.Log ("fileList Count [Inside Function]: " + fileList.Count);
-			return fileList;
+			Debug.Log ("[This is on the ASYNC function] fileList Count [Inside Function]: " + fileList.Count);
+
 		}
 		#endregion
 
