@@ -11,23 +11,13 @@ using Amazon.S3.Util;
 using Amazon.Runtime;
 using Amazon.CognitoIdentity;
 
-/*
- *  Objective: S3 interface with Unity to allow for:
- * 	(1) Upload a local Directory onto S3
- *  (2) Read all files from S3 into a dictionary<string, FileEntry>
- *  (3) Download actual files from S3 to Local (replacing flagged files)
-*/
-
-/* NOTES:
- * (1) Assumption is taken for now, all files from S3 to Local are treated as Unmodified or Master Copies
- * (2) 
-*/
-
 namespace S3Verification
 {
 	public class S3VerificationStructure : MonoBehaviour
 	{
 		public Dictionary<string, FileEntry> FileList;
+		public delegate void OnAsyncRetrievedEvent(Dictionary<string, FileEntry> fileEntryDictionary);
+		public OnAsyncRetrievedEvent OnAsyncRetrieved;
 
 		#region S3 Initilization
 		public string S3BucketName = null;
@@ -46,10 +36,17 @@ namespace S3Verification
 
 		void Start()
 		{
+			FileList = new Dictionary<string, FileEntry> ();
 			UnityInitializer.AttachToGameObject(this.gameObject);
 			AWSConfigs.HttpClient = AWSConfigs.HttpClientOption.UnityWebRequest;
 
-			S3PostFiles ();
+			S3GetObjects ();
+			OnAsyncRetrieved += new OnAsyncRetrievedEvent (OnAsyncRetrievedTest);
+
+		}
+
+		void OnAsyncRetrievedTest(Dictionary<string, FileEntry> fileEntryDictionary) {
+			FileList = fileEntryDictionary;
 		}
 
 		#region private members
@@ -81,8 +78,6 @@ namespace S3Verification
 		#endregion
 
 		#region GetLocalFiles <DEBUG> [Done - Needs Testing]
-		// Populate a Dictionary<string, FileEntry> with all files from a local directory
-		// For testing purposes, the FileList in this struct will be used for both uploading a directory and recieving a directory.
 		public Dictionary<string, FileEntry> GetLocalFiles()
 		{
 			Dictionary<string, FileEntry> localFileList = new Dictionary<string, FileEntry> ();
@@ -95,10 +90,7 @@ namespace S3Verification
 		}
 
 		#region S3 GetObjects [Not - Done]
-		// Return a Dictionary of all objects in terms of files
-		// NOTE: ListObjects method can only return only 1000 objects
-		// 		 Anything more, we'll have to use markers to advance to the next set of 1000 objects.
-		public Dictionary<string, FileEntry> S3GetObjects(string bucket)
+		public void S3GetObjects()
 		{
 			Dictionary<string, FileEntry> fileList = new Dictionary<string, FileEntry> ();
 
@@ -113,11 +105,13 @@ namespace S3Verification
 				{
 					responseObject.Response.S3Objects.ForEach ((o) => 
 					{
-						FileEntry entry = new FileEntry(o.Key, o.Key, o.Size, FileEntry.Status.Unmodified, (DateTime)o.LastModified, (DateTime)o.LastModified);
-						Debug.Log ("Found object with key: " + o.Key + " size: " + o.Size + " last modification date: " + (DateTime)o.LastModified);
+						FileEntry entry = new FileEntry(o.Key, GetURL(o.Key), o.Size, FileEntry.Status.Unmodified, (DateTime)o.LastModified, (DateTime)o.LastModified);
 						fileList.Add(entry.path, entry);
-						Debug.Log ("fileList Count [Inside responseObject]: " + fileList.Count);
 					});
+
+						if (OnAsyncRetrieved != null) {
+							OnAsyncRetrieved(fileList);
+						}
 				} 
 
 				catch (AmazonS3Exception e) 
@@ -125,14 +119,10 @@ namespace S3Verification
 					throw e;
 				}
 			});
-
-			Debug.Log ("fileList Count [Inside Function]: " + fileList.Count);
-			return fileList;
 		}
 		#endregion
 
-		#region S3 PostFiles <DEBUG> [Not - Done]
-		// Posts all "objects" or files in fileList onto S3 with valid bucket name
+		#region S3 PostFiles
 		public void S3PostFiles()
 		{
 			foreach (string path in GetAllFilePaths()) 
@@ -143,10 +133,19 @@ namespace S3Verification
 		#endregion
 
 		#region Helper Functions
-		// Returns an array of strings of all paths in a specific directory
+		public string GetFileName(string k)
+		{
+			return k;
+		}
+
+		public string GetURL(string k)
+		{
+			return "https://s3.amazonaws.com/" + S3BucketName + "/"+k;
+		}
+			
 		public string[] GetAllFilePaths()
 		{
-			return Directory.GetFiles ("C:\\Users\\Joshu\\Desktop\\Test", "*.*", SearchOption.AllDirectories);
+			return Directory.GetFiles (Application.persistentDataPath, "*.*", SearchOption.AllDirectories);
 		}
 
 		// Handles a single Posting of an Object to an S3 Bucket
@@ -158,19 +157,15 @@ namespace S3Verification
 				Bucket = S3BucketName,
 				Key = key,
 				InputStream = stream,
-				CannedACL = S3CannedACL.Private
+				CannedACL = S3CannedACL.PublicRead
 			};
 
 			Client.PostObjectAsync (request, (requestObject) => 
 			{
-					if (requestObject.Exception == null)
-					{
-						Debug.Log("Successful Post");
-					}
-					else
-					{
-						Debug.Log("\nException while posting the result object!");	
-					}
+				if (requestObject.Exception != null)
+				{
+					throw requestObject.Exception;
+				}
 			});
 		}
 		#endregion
