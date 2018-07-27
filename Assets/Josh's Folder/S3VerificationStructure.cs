@@ -17,6 +17,7 @@ namespace S3Verification
 	{
 		public Dictionary<string, FileEntry> FileList;
 		public delegate void OnAsyncRetrievedEvent(Dictionary<string, FileEntry> fileEntryDictionary);
+		public delegate void onCompleteS3DownloadObject();
 		public OnAsyncRetrievedEvent OnAsyncRetrieved;
 
 		#region S3 Initilization
@@ -40,9 +41,22 @@ namespace S3Verification
 			UnityInitializer.AttachToGameObject(this.gameObject);
 			AWSConfigs.HttpClient = AWSConfigs.HttpClientOption.UnityWebRequest;
 
-			S3GetObjects ();
+			GetLocalFiles ();
+
+			S3PostFiles ();
+
+			S3ListObjects ();
 			OnAsyncRetrieved += new OnAsyncRetrievedEvent (OnAsyncRetrievedTest);
 
+		}
+
+		void Update()
+		{
+			if (Input.GetKey("down"))
+			{
+				GetObject("WHY.png", "C:\\Users\\Joshu\\Desktop\\Test\\WHY.png"); 
+				//GetObject("test.unitypackage", "C:\\Users\\Joshu\\Desktop\\Test\\test.unitypackage");
+			}
 		}
 
 		void OnAsyncRetrievedTest(Dictionary<string, FileEntry> fileEntryDictionary) {
@@ -71,13 +85,12 @@ namespace S3Verification
 				{
 					_s3Client = new AmazonS3Client(Credentials, _S3Region);
 				}
-				//test comment
 				return _s3Client;
 			}
 		}
 		#endregion
 
-		#region GetLocalFiles <DEBUG> [Done - Needs Testing]
+		#region GetLocalFiles
 		public Dictionary<string, FileEntry> GetLocalFiles()
 		{
 			Dictionary<string, FileEntry> localFileList = new Dictionary<string, FileEntry> ();
@@ -89,36 +102,44 @@ namespace S3Verification
 			return localFileList;
 		}
 
-		#region S3 GetObjects [Not - Done]
-		public void S3GetObjects()
+		#region S3 ListObjects()
+		public void S3ListObjects()
 		{
-			Dictionary<string, FileEntry> fileList = new Dictionary<string, FileEntry> ();
-
 			var request = new ListObjectsRequest () 
 			{
 				BucketName = S3BucketName
 			};
-					
+
 			Client.ListObjectsAsync (request, (responseObject) => 
-			{
-				try 
 				{
-					responseObject.Response.S3Objects.ForEach ((o) => 
+					try 
 					{
-						FileEntry entry = new FileEntry(o.Key, GetURL(o.Key), o.Size, FileEntry.Status.Unmodified, (DateTime)o.LastModified, (DateTime)o.LastModified);
-						fileList.Add(entry.path, entry);
-					});
+						responseObject.Response.S3Objects.ForEach ((o) => 
+							{
+								FileEntry entry = new FileEntry(o.Key, GetURL(o.Key), o.Size, FileEntry.Status.Unmodified, (DateTime)o.LastModified, (DateTime)o.LastModified);
+								FileList.Add(entry.path, entry);
+							});
 
 						if (OnAsyncRetrieved != null) {
-							OnAsyncRetrieved(fileList);
+							OnAsyncRetrieved(FileList);
 						}
-				} 
+					} 
 
-				catch (AmazonS3Exception e) 
-				{
-					throw e;
-				}
-			});
+					catch (AmazonS3Exception e) 
+					{
+						throw e;
+					}
+				});
+		}
+		#endregion
+
+		#region S3 GetObjects
+		public void S3GetObjects()
+		{
+			foreach (KeyValuePair<string, FileEntry> temp in FileList) 
+			{
+
+			}
 		}
 		#endregion
 
@@ -133,14 +154,9 @@ namespace S3Verification
 		#endregion
 
 		#region Helper Functions
-		public string GetFileName(string k)
-		{
-			return k;
-		}
-
 		public string GetURL(string k)
 		{
-			return "https://s3.amazonaws.com/" + S3BucketName + "/"+k;
+			return "https://s3.amazonaws.com/" + S3BucketName + "/" + k;
 		}
 			
 		public string[] GetAllFilePaths()
@@ -148,7 +164,37 @@ namespace S3Verification
 			return Directory.GetFiles (Application.persistentDataPath, "*.*", SearchOption.AllDirectories);
 		}
 
-		// Handles a single Posting of an Object to an S3 Bucket
+		public void GetObject(string fileName, string key)
+		{
+			Debug.Log ("Inside GetObject");
+			Client.GetObjectAsync (S3BucketName, fileName, (responseObj) => 
+			{
+					MemoryStream memStream = new MemoryStream();
+
+					var response = responseObj.Response;
+					BufferedStream buffStream = new BufferedStream(response.ResponseStream);
+					byte[] buffer = new byte[0x2000];
+					int count = 0;
+
+					while ((count = buffStream.Read(buffer, 0, buffer.Length)) > 0)
+					{
+						
+						memStream.Write(buffer, 0, count);
+					}
+					Debug.Log("Finished Stream");
+					string tempFile = Path.GetTempFileName();
+					FileStream newFile = new FileStream(tempFile, FileMode.Create);
+
+					memStream.Position = 0;
+					memStream.CopyTo(newFile);
+					newFile.Close();
+
+					if (File.Exists(key))
+						File.Delete(key);
+					File.Move(tempFile, key);
+			});
+		}
+
 		public void PostObject(string path, string key)
 		{
 			var stream = new FileStream (path, FileMode.Open, FileAccess.Read, FileShare.Read);
@@ -168,6 +214,7 @@ namespace S3Verification
 				}
 			});
 		}
+			
 		#endregion
 	} // End Class
 } // End Namespace
