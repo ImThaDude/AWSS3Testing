@@ -54,7 +54,7 @@ namespace S3Verification
 		{
 			if (Input.GetKey("down"))
 			{
-				GetObject("WHY.png", "C:\\Users\\Joshu\\Desktop\\Test\\WHY.png"); 
+				GetObject("WHY.PNG", "C:\\Users\\Joshu\\Desktop\\Test\\WHY.PNG"); 
 				//GetObject("test.unitypackage", "C:\\Users\\Joshu\\Desktop\\Test\\test.unitypackage");
 			}
 		}
