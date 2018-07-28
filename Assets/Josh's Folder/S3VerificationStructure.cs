@@ -54,8 +54,9 @@ namespace S3Verification
 		{
 			if (Input.GetKey("down"))
 			{
-				GetObject("WHY.PNG", "C:\\Users\\Joshu\\Desktop\\Test\\WHY.PNG"); 
-				//GetObject("test.unitypackage", "C:\\Users\\Joshu\\Desktop\\Test\\test.unitypackage");
+				GetObject ("HG.txt", "C:\\Users\\Joshu\\Desktop\\Dump\\HG.txt");
+				GetObject("WHY.PNG", "C:\\Users\\Joshu\\Desktop\\Dump\\WHY.PNG"); 
+				GetObject("test.unitypackage", "C:\\Users\\Joshu\\Desktop\\Dump\\test.unitypackage");
 			}
 		}
 
@@ -161,37 +162,32 @@ namespace S3Verification
 			
 		public string[] GetAllFilePaths()
 		{
-			return Directory.GetFiles (Application.persistentDataPath, "*.*", SearchOption.AllDirectories);
+			return Directory.GetFiles ("C:\\Users\\Joshu\\Desktop\\Dump\\", "*.*", SearchOption.AllDirectories);
 		}
 
 		public void GetObject(string fileName, string key)
 		{
-			Debug.Log ("Inside GetObject");
 			Client.GetObjectAsync (S3BucketName, fileName, (responseObj) => 
 			{
-					MemoryStream memStream = new MemoryStream();
-
 					var response = responseObj.Response;
-					BufferedStream buffStream = new BufferedStream(response.ResponseStream);
-					byte[] buffer = new byte[0x2000];
-					int count = 0;
-
-					while ((count = buffStream.Read(buffer, 0, buffer.Length)) > 0)
+					if (response.ResponseStream != null)
 					{
-						
-						memStream.Write(buffer, 0, count);
+						using (var fs = File.Create(key))
+						{
+							byte[] buffer = new byte [10000000];
+							int count = 0;
+							while ((count = response.ResponseStream.Read(buffer, 0, buffer.Length)) != 0)
+							{
+								fs.Write(buffer, 0, count);
+							}
+							fs.Flush();
+						}
 					}
-					Debug.Log("Finished Stream");
-					string tempFile = Path.GetTempFileName();
-					FileStream newFile = new FileStream(tempFile, FileMode.Create);
+					else
+					{
+						Debug.Log("FAILED");
+					}
 
-					memStream.Position = 0;
-					memStream.CopyTo(newFile);
-					newFile.Close();
-
-					if (File.Exists(key))
-						File.Delete(key);
-					File.Move(tempFile, key);
 			});
 		}
 
