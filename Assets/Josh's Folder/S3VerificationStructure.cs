@@ -54,9 +54,9 @@ namespace S3Verification
 		{
 			if (Input.GetKey("down"))
 			{
-				GetObject ("HG.txt", "C:\\Users\\Joshu\\Desktop\\Dump\\HG.txt");
-				GetObject("WHY.PNG", "C:\\Users\\Joshu\\Desktop\\Dump\\WHY.PNG"); 
-				GetObject("test.unitypackage", "C:\\Users\\Joshu\\Desktop\\Dump\\test.unitypackage");
+				GetObject ("HG.txt", "C:\\Users\\Joshu\\Desktop\\Test\\HG.txt");
+				//GetObject("WHY.PNG", "C:\\Users\\Joshu\\Desktop\\Test\\WHY.PNG"); 
+				//GetObject("test.unitypackage", "C:\\Users\\Joshu\\Desktop\\Test\\test.unitypackage");
 			}
 		}
 
@@ -162,33 +162,38 @@ namespace S3Verification
 			
 		public string[] GetAllFilePaths()
 		{
-			return Directory.GetFiles ("C:\\Users\\Joshu\\Desktop\\Dump\\", "*.*", SearchOption.AllDirectories);
+			return Directory.GetFiles (Application.persistentDataPath, "*.*", SearchOption.AllDirectories);
 		}
 
 		public void GetObject(string fileName, string key)
 		{
+			Debug.Log ("Inside GetObject");
 			Client.GetObjectAsync (S3BucketName, fileName, (responseObj) => 
 			{
+					MemoryStream memStream = new MemoryStream();
 					var response = responseObj.Response;
-					if (response.ResponseStream != null)
+					BufferedStream buffStream = new BufferedStream(response.ResponseStream);
+					byte[] buffer = new byte[0x2000];
+					int count = 0;
+
+					while ((count = buffStream.Read(buffer, 0, buffer.Length)) > 0)
 					{
-						using (var fs = File.Create(key))
-						{
-							byte[] buffer = new byte [10000000];
-							int count = 0;
-							while ((count = response.ResponseStream.Read(buffer, 0, buffer.Length)) != 0)
-							{
-								fs.Write(buffer, 0, count);
-							}
-							fs.Flush();
-						}
-					}
-					else
-					{
-						Debug.Log("FAILED");
+						
+						memStream.Write(buffer, 0, count);
 					}
 
+					string tempFile = Path.GetTempFileName();
+					FileStream newFile = new FileStream(tempFile, FileMode.Create);
+
+					memStream.Position = 0;
+					memStream.CopyTo(newFile);
+					newFile.Close();
+
+					if (File.Exists(key))
+						File.Delete(key);
+					File.Move(tempFile, key);
 			});
+			Debug.Log ("Finished with Upload");
 		}
 
 		public void PostObject(string path, string key)
